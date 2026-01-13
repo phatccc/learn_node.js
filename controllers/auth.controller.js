@@ -16,22 +16,27 @@ const refreshTokens = [];
 // Register
 
 exports.register = async (req, res) => {
-   try {
-       const { username , password } = req.body
+    try {
+        const { username, password } = req.body
 
-       const existUser = await User.findOne({username }) ;
-       if(existUser) return res.status(400).send('Username already exist')
+        const existUser = await User.findOne({ username });
+        if (existUser) return res.status(400).send('Username already exist')
 
-       const hashedPassword = await bcrypt.hash(password, 12);
-       console.log(hashedPassword)
+        const hashedPassword = await bcrypt.hash(password, 12);
+        console.log(hashedPassword)
 
-       const user = new User({username , password : hashedPassword})
-       await user.save();
+        const user = await User.create({
+            username,
+            password: hashedPassword,
+            role: "user"
+        })
+        console.log(user)
 
-       res.status(201).json({message : "User created successfully" , user_id : user._id})
-   } catch (error) {
-       console.log(error)
-   }
+        res.status(201).json({ message: "User created successfully", user_id: user._id })
+    } catch (error) {
+        console.log(error)
+        res.status(500).send("Server Error")
+    }
 }
 
 // Login
@@ -39,20 +44,27 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
     const { username, password } = req.body;
 
-    const user = users.find(u => u.username === username);
+    const user = await User.findOne({ username });
     if (!user) return res.status(400).send('Invalid username or password');
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).send('Invalid username or password');
 
     const accessToken = jwt.sign(
-        { username },
+        {
+            id: user._id,
+            username: user.username,
+            role: user.role
+        },
         JWT_SECRET,
-        { expiresIn: '1h' }
+        { expiresIn: '15m' }
     );
 
+
     const refreshToken = jwt.sign(
-        { username },
+        {
+            id: user._id
+        },
         JWT_REFRESH_SECRET,
         { expiresIn: '7d' }
     );
@@ -82,29 +94,40 @@ exports.profile = (req, res) => {
 
 // Refresh
 
-exports.refresh = (req, res) => {
+// Refresh
+
+exports.refresh = async (req, res) => {
     const { refreshToken } = req.body
 
     if (!refreshToken) {
         return res.status(403).json({ message: 'Refresh token is required' })
     }
 
-    jwt.verify(refreshToken, JWT_REFRESH_SECRET, (err, decoded) => {
-        if (err) {
-            console.log('JWT verification error:', err.message);
-            return res.status(403).json({ message: 'Invalid or expired refresh token' })
-        }
+    try {
+        const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
 
         if (!refreshTokens.includes(refreshToken)) {
             return res.status(403).json({ message: 'Refresh token is no longer valid (server restarted or revoked)' })
         }
 
+        // Fetch user to get current role and username
+        const user = await User.findById(decoded.id);
+        if (!user) return res.status(403).send('User not found');
+
         const newAccessToken = jwt.sign(
-            { username: decoded.username },
+            {
+                id: user._id,
+                username: user.username,
+                role: user.role
+            },
             JWT_SECRET,
             { expiresIn: "1h" }
         )
 
         res.json({ accessToken: newAccessToken })
-    })
+
+    } catch (err) {
+        console.log('JWT verification error:', err.message);
+        return res.status(403).json({ message: 'Invalid or expired refresh token' })
+    }
 }

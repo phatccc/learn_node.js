@@ -3,9 +3,9 @@ require("dotenv").config();
 const express = require('express');
 const authRoutes = require('./routes/auth.route');
 
-app = express();
+const app = express();
 
 app.use(express.json());
-app.use("" , authRoutes) ;
+app.use("", authRoutes);
 
 module.exports = app
