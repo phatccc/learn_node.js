@@ -94,8 +94,6 @@ exports.profile = (req, res) => {
 
 // Refresh
 
-// Refresh
-
 exports.refresh = async (req, res) => {
     const { refreshToken } = req.body
 
