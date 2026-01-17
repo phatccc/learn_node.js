@@ -28,14 +28,36 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProduct = async (req, res) => {
     try {
-        const filter = req.decode.role
-            === 'admin' ? {} : { createBy: req.decode.id }
+        let { page = 1, limit = 10, search = '', sort = 'createdAt' } = req.query;
+
+        page = parseInt(page);
+        limit = parseInt(limit);
+
+        const filter = {
+            name: { $regex: search, $options: 'i' }
+        }
+
+        if (req.decode.role !== 'admin') {
+            filter.createBy = req.decode.id
+        }
 
         const products = await Product.find(filter)
+            .sort({ [sort]: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
             .populate('createBy', 'username role')
-            .sort({ createdAt: -1 })
 
-        res.json(products)
+        const total = await Product.countDocuments(filter)
+
+        res.json({
+            data: products,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
         console.error(error);
         res.status(500).send('Server Error');
